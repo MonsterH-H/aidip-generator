@@ -6,8 +6,7 @@
  * AIDIP_ESPACES_UTILISATEURS.md v3.1.
  *
  * These types are framework-agnostic: they describe the domain model
- * that every service interface (Rayfin-backed or mock-backed) must
- * produce and consume.
+ * that every service interface (Rayfin-backed) must produce and consume.
  */
 
 /* ----------------------------------------------------------------------------
@@ -136,6 +135,13 @@ export interface InvitationInput {
   role: UserRole;
   personalMessage?: string;
   validityDays: number;
+  /**
+   * Optional override of the target tenant. Used by the super admin
+   * console to invite a member into an explicitly selected company
+   * (the session's companyId is null for super admins). When omitted,
+   * the service falls back to the current session's company.
+   */
+  companyId?: string;
 }
 
 /* ----------------------------------------------------------------------------

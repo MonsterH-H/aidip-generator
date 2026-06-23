@@ -303,3 +303,31 @@ declare module 'jsonwebtoken' {
 
   export function decode(token: string): JwtPayload | string | null;
 }
+
+// ============================================================================
+// resend — the email delivery SDK (https://resend.com)
+// ============================================================================
+declare module 'resend' {
+  export interface CreateEmailOptions {
+    from: string;
+    to: string | string[];
+    subject: string;
+    html?: string;
+    text?: string;
+    replyTo?: string;
+    cc?: string | string[];
+    bcc?: string | string[];
+    tags?: Array<{ name: string; value: string }>;
+  }
+
+  export interface CreateEmailResponse {
+    id: string;
+  }
+
+  export class Resend {
+    constructor(apiKey: string);
+    readonly emails: {
+      send(options: CreateEmailOptions): Promise<CreateEmailResponse>;
+    };
+  }
+}

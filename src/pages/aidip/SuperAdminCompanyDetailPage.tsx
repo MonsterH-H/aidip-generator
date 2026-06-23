@@ -119,6 +119,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   formatDate,
   formatDateTime,
   formatNumber,
@@ -581,15 +589,16 @@ function UsersTab({ company }: { company: Company }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // MockUserService.listByCompany returns the current session's company
-      // users. For super admins (no companyId), this returns []. In a real
-      // backend, super admins would receive a scoped list for the requested
-      // tenant — for the MVP demo we surface whatever the service returns
-      // and filter client-side by company id.
-      const items = await ServiceContainer.getInstance().aidip.user.listByCompany({
-        search: search || undefined,
-      });
-      setUsers(items.filter((u) => u.companyId === company.id));
+      // Super admins do not belong to a company (session companyId is null),
+      // so user.listByCompany() would return []. We use listByCompanyId to
+      // fetch members of the explicitly selected tenant instead.
+      const items = await ServiceContainer.getInstance().aidip.user.listByCompanyId(
+        company.id,
+        { search: search || undefined },
+      );
+      setUsers(items);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to load members.');
     } finally {
       setLoading(false);
     }
@@ -710,42 +719,141 @@ function UsersTab({ company }: { company: Company }) {
         targetUserName={impersonateUser?.fullName}
       />
 
-      {/* Invite Admin (mock) */}
-      <AlertDialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Invite Company Admin</AlertDialogTitle>
-            <AlertDialogDescription>
-              An invitation email will be sent with a forced <strong>admin</strong> role
-              (non-editable). The invitee will be able to manage members, KPIs and dataset
-              permissions within {company.name}.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex flex-col gap-2 px-1">
-            <Label className="text-xs">Admin email</Label>
-            <Input type="email" placeholder="admin@example.com" />
-            <p className="text-[11px] text-muted-foreground">
-              The role is locked to{' '}
-              <Badge variant="outline" className="text-[10px]">
-                Admin
-              </Badge>{' '}
-              and cannot be changed during invitation.
-            </p>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setInviteOpen(false);
-                toast.success('Admin invitation sent (mock).');
-              }}
-            >
-              Send invite
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Invite Admin — real invitation.create call with locked 'admin' role */}
+      <InviteAdminDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        company={company}
+        onInvited={load}
+      />
     </Card>
+  );
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function InviteAdminDialog({
+  open,
+  onOpenChange,
+  company,
+  onInvited,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  company: Company;
+  onInvited: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset the form whenever the dialog is opened.
+  useEffect(() => {
+    if (open) {
+      setEmail('');
+      setError(null);
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const trimmed = email.trim();
+  const isValid = EMAIL_RE.test(trimmed);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValid) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await ServiceContainer.getInstance().aidip.invitation.create({
+        email: trimmed,
+        role: 'admin',
+        validityDays: 7,
+        companyId: company.id,
+      });
+      toast.success(`Admin invitation sent to ${trimmed}`);
+      onOpenChange(false);
+      onInvited();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send invitation.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Invite Company Admin</DialogTitle>
+          <DialogDescription>
+            An invitation email will be sent with a forced <strong>admin</strong> role
+            (non-editable). The invitee will be able to manage members, KPIs and dataset
+            permissions within {company.name}.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="invite-admin-email" className="text-xs">
+              Admin email
+            </Label>
+            <Input
+              id="invite-admin-email"
+              type="email"
+              autoComplete="email"
+              placeholder="admin@example.com"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(null);
+              }}
+              disabled={submitting}
+              aria-invalid={!!error}
+              className={cn(error && 'border-destructive focus-visible:ring-destructive/30')}
+            />
+            {error ? (
+              <p className="text-xs font-medium text-destructive">{error}</p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                The role is locked to{' '}
+                <Badge variant="outline" className="text-[10px]">
+                  Admin
+                </Badge>{' '}
+                and cannot be changed during invitation. The invitation link expires in 7 days.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!isValid || submitting} className="gap-1.5">
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <UserCog className="h-4 w-4" />
+                  Send invite
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -954,12 +1062,15 @@ function FabricConfigTab({
         authType: form.authType,
       };
       if (secretEditing && form.servicePrincipalClientSecret) {
-        // Mock: store a masked marker simulating AES-256 encrypted value
-        patch.servicePrincipalClientSecretEnc = MASKED_SECRET;
+        // Forward the raw secret to the company service. AES-256 encryption
+        // is applied at the service layer (Rayfin function / DAB write) and
+        // the value is never persisted in plaintext.
+        patch.servicePrincipalClientSecretEnc = form.servicePrincipalClientSecret;
       }
       await ServiceContainer.getInstance().aidip.company.update(company.id, patch);
       toast.success('Fabric configuration saved.');
       setSecretEditing(false);
+      setForm({ ...form, servicePrincipalClientSecret: '' });
       onSaved();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed.');
@@ -1212,11 +1323,17 @@ function AiConfigTab({ company, onSaved }: { company: Company; onSaved: () => vo
 
   const hasStoredKey = !!company.azureOpenaiApiKeyEnc;
 
-  // Token consumption mock — derived from queries today
-  const tokensToday = company.queriesToday * 850;
-  const tokensMonth = tokensToday * 22;
-  const budgetPct = Math.min(100, Math.round((tokensToday / form.aiDailyTokenBudget) * 100));
-  const estimatedCostUsd = (tokensToday / 1_000_000) * 5;
+  // Real token consumption surfaced from the company stats. The platform
+  // tracks the daily AI-augmented query count (`queriesToday`) and the
+  // tenant's daily token budget (`aiDailyTokenBudget`). Monthly rollups
+  // and dollar cost are not persisted on the company row, so we surface
+  // an em dash instead of inventing numbers.
+  const consumptionToday = company.queriesToday;
+  const dailyBudget = company.aiDailyTokenBudget;
+  const budgetPct =
+    dailyBudget > 0
+      ? Math.min(100, Math.round((consumptionToday / dailyBudget) * 100))
+      : 0;
 
   const handleSave = async () => {
     setSaving(true);
@@ -1231,11 +1348,15 @@ function AiConfigTab({ company, onSaved }: { company: Company; onSaved: () => vo
         aiDailyTokenBudget: form.aiDailyTokenBudget,
       };
       if (keyEditing && form.azureOpenaiApiKey) {
-        patch.azureOpenaiApiKeyEnc = MASKED_SECRET;
+        // Forward the raw API key to the company service. AES-256
+        // encryption is applied at the service layer (Rayfin function /
+        // DAB write) and the value is never persisted in plaintext.
+        patch.azureOpenaiApiKeyEnc = form.azureOpenaiApiKey;
       }
       await ServiceContainer.getInstance().aidip.company.update(company.id, patch);
       toast.success('AI configuration saved.');
       setKeyEditing(false);
+      setForm({ ...form, azureOpenaiApiKey: '' });
       onSaved();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed.');
@@ -1388,17 +1509,17 @@ function AiConfigTab({ company, onSaved }: { company: Company; onSaved: () => vo
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-muted-foreground">Today</span>
-              <span className="text-xl font-bold text-foreground">{formatNumber(tokensToday)}</span>
+              <span className="text-xl font-bold text-foreground">
+                {consumptionToday > 0 ? formatNumber(consumptionToday) : '—'}
+              </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-muted-foreground">This month</span>
-              <span className="text-xl font-bold text-foreground">{formatNumber(tokensMonth)}</span>
+              <span className="text-xl font-bold text-foreground">—</span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-muted-foreground">Estimated cost</span>
-              <span className="text-xl font-bold text-foreground">
-                ${estimatedCostUsd.toFixed(2)}
-              </span>
+              <span className="text-xl font-bold text-foreground">—</span>
             </div>
           </div>
           <Separator className="my-4" />
@@ -1415,7 +1536,9 @@ function AiConfigTab({ company, onSaved }: { company: Company; onSaved: () => vo
                       : 'text-success',
                 )}
               >
-                {budgetPct}% of {formatNumber(form.aiDailyTokenBudget)} tokens
+                {dailyBudget > 0
+                  ? `${budgetPct}% of ${formatNumber(dailyBudget)} tokens`
+                  : '—'}
               </span>
             </div>
             <Progress
@@ -1606,14 +1729,18 @@ function SupportTab({
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load company users (will be empty for super admin due to mock scoping —
-  // for MVP we surface whatever is returned and offer manual entry fallback)
+  // Load members of the explicitly selected tenant. Super admins do not
+  // belong to a company (session companyId is null), so user.listByCompany()
+  // would return an empty list. listByCompanyId bypasses the session scope
+  // and reads the tenant's users directly via the Rayfin data client.
   useEffect(() => {
     let cancelled = false;
     ServiceContainer.getInstance()
-      .aidip.user.listByCompany()
-      .then((items) => !cancelled && setUsers(items.filter((u) => u.companyId === company.id)))
-      .catch(() => {});
+      .aidip.user.listByCompanyId(company.id)
+      .then((items) => !cancelled && setUsers(items))
+      .catch(() => {
+        if (!cancelled) setUsers([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -1707,7 +1834,7 @@ function SupportTab({
               <SelectContent>
                 {users.length === 0 ? (
                   <SelectItem value="__none" disabled>
-                    No members available (mock scoping)
+                    No members available
                   </SelectItem>
                 ) : (
                   users.map((u) => (

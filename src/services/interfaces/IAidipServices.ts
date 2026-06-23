@@ -2,9 +2,9 @@
  * AIDIP service interfaces.
  *
  * Each interface declares the contract a service must satisfy. Concrete
- * implementations live in `src/services/mock/` (development) and would live
- * in `src/services/rayfin/` (production). Components consume services
- * exclusively through these interfaces via the `ServiceContainer`.
+ * implementations live in `src/services/rayfin/aidip/` (production) and must
+ * be consumed by components exclusively through these interfaces via the
+ * `ServiceContainer`.
  */
 
 import type {
@@ -78,6 +78,19 @@ export interface IUserService {
     status?: UserStatus;
     search?: string;
   }): Promise<User[]>;
+  /**
+   * Lists all users of an explicit company. Used by the super admin
+   * console to inspect any tenant's members — the session's companyId
+   * (null for super admin) is bypassed in favor of the supplied id.
+   */
+  listByCompanyId(
+    companyId: string,
+    filters?: {
+      role?: UserRole;
+      status?: UserStatus;
+      search?: string;
+    },
+  ): Promise<User[]>;
   get(id: string): Promise<User | null>;
   updateRole(id: string, role: UserRole): Promise<User>;
   suspend(id: string): Promise<User>;
@@ -123,7 +136,7 @@ export interface IChatService {
    * generation → DAB/XMLA execution → guardrail → formatting → save).
    * The response is returned as a single structured payload — the UI may
    * render the text portion progressively if it chooses, but no streaming
-   * is simulated at the service layer.
+   * is handled at the service layer.
    */
   sendMessage(input: SendChatMessageInput): Promise<SendChatMessageResult>;
 

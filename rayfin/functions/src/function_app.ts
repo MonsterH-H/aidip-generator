@@ -35,6 +35,8 @@ import type { ChatMessage } from '../../data/ChatMessage.js';
 import type { Conversation } from '../../data/Conversation.js';
 import type { User } from '../../data/User.js';
 import type { Notification } from '../../data/Notification.js';
+import type { Invitation } from '../../data/Invitation.js';
+import type { NotificationPreferences } from '../../data/NotificationPreferences.js';
 
 import {
   getAzureOpenAIConfig,
@@ -57,6 +59,12 @@ import {
   getImpersonationTtlMinutes,
   type ImpersonationTokenPayload,
 } from './jwt.js';
+import { sendEmail } from './email.js';
+import {
+  buildInvitationEmail,
+  buildNotificationEmail,
+  buildExportReadyEmail,
+} from './email-templates.js';
 
 const udf = new UserDataFunctions();
 
@@ -738,6 +746,41 @@ udf.func(
           archivedAt: null,
           createdAt: new Date(),
         } as never);
+
+        // Send the export-ready email directly via Resend (we're already
+        // server-side — no need to invoke a separate function).
+        const exportUser = (await data.User.findById(snapshot.user_id)) as User | null;
+        if (exportUser?.email) {
+          // Check the user's email preferences before sending.
+          const prefsRows = await data.NotificationPreferences.findMany({
+            user_id: { eq: snapshot.user_id },
+          } as never);
+          const prefs = (prefsRows as NotificationPreferences[])[0];
+          const emailEnabled = !prefs || (prefs.emailEnabled && !parseJsonColumn<string[]>(prefs.typesDisabled, []).includes('export_ready'));
+
+          if (emailEnabled) {
+            const exportEmailData = buildExportReadyEmail({
+              recipientName: exportUser.fullName,
+              reportTitle: report.title,
+              format: input.config.format,
+              fileSizeKb,
+              downloadUrl: signedUrl ?? blobUrl,
+              expiresAt: expiresAt.toISOString(),
+            });
+            const emailResult = await sendEmail({
+              to: exportUser.email,
+              subject: exportEmailData.subject,
+              html: exportEmailData.html,
+              text: exportEmailData.text,
+              tags: [{ name: 'type', value: 'export_ready' }, { name: 'snapshotId', value: input.snapshotId }],
+            });
+            if (!emailResult.ok) {
+              ctx.log.warn(`Export-ready email not sent to ${exportUser.email}: ${emailResult.errorMessage}`);
+            } else {
+              ctx.log.info(`Export-ready email sent to ${exportUser.email} (messageId=${emailResult.messageId}).`);
+            }
+          }
+        }
       }
 
       ctx.log.info(`exportReport completed: ${fileSizeKb}KB, url=${blobUrl}`);
@@ -1731,6 +1774,226 @@ udf.func(
 );
 
 /* ============================================================================
+   11. SEND INVITATION EMAIL — via Resend
+   ============================================================================ */
+
+interface SendInvitationEmailInput {
+  invitationId: string;
+}
+
+interface SendInvitationEmailResult {
+  ok: boolean;
+  messageId?: string;
+  errorMessage?: string;
+}
+
+udf.func(
+  'sendInvitationEmail',
+  async (input: SendInvitationEmailInput, ctx: RayfinContext<AidipSchema>): Promise<SendInvitationEmailResult> => {
+    ctx.log.info(`sendInvitationEmail invoked: invitationId=${input.invitationId}`);
+    const data = ctx.getDataClient();
+
+    const invitation = (await data.Invitation.findById(input.invitationId)) as Invitation | null;
+    if (!invitation) {
+      return { ok: false, errorMessage: 'Invitation not found.' };
+    }
+    if (invitation.status !== 'pending') {
+      return { ok: false, errorMessage: `Invitation status is "${invitation.status}", not "pending".` };
+    }
+
+    const company = invitation.company_id
+      ? ((await data.Company.findById(invitation.company_id)) as Company | null)
+      : null;
+    const inviter = (await data.User.findById(invitation.invitedBy)) as User | null;
+
+    const emailData = buildInvitationEmail({
+      inviteeEmail: invitation.email,
+      inviteeRole: invitation.role,
+      companyName: company?.name ?? 'AIDIP',
+      inviterName: inviter?.fullName ?? 'Your administrator',
+      personalMessage: invitation.personalMessage ?? null,
+      token: invitation.token,
+      expiresAt: invitation.expiresAt instanceof Date
+        ? invitation.expiresAt.toISOString()
+        : String(invitation.expiresAt),
+    });
+
+    const result = await sendEmail({
+      to: invitation.email,
+      subject: emailData.subject,
+      html: emailData.html,
+      text: emailData.text,
+      tags: [{ name: 'type', value: 'invitation' }, { name: 'invitationId', value: input.invitationId }],
+    });
+
+    if (result.ok) {
+      ctx.log.info(`Invitation email sent to ${invitation.email} (messageId=${result.messageId}).`);
+    } else {
+      ctx.log.error(`Failed to send invitation email: ${result.errorMessage}`);
+    }
+    return result;
+  },
+  [],
+);
+
+/* ============================================================================
+   12. SEND NOTIFICATION EMAIL — via Resend
+   ============================================================================ */
+
+interface SendNotificationEmailInput {
+  notificationId: string;
+}
+
+interface SendNotificationEmailResult {
+  ok: boolean;
+  messageId?: string;
+  errorMessage?: string;
+}
+
+udf.func(
+  'sendNotificationEmail',
+  async (input: SendNotificationEmailInput, ctx: RayfinContext<AidipSchema>): Promise<SendNotificationEmailResult> => {
+    ctx.log.info(`sendNotificationEmail invoked: notificationId=${input.notificationId}`);
+    const data = ctx.getDataClient();
+
+    const notification = (await data.Notification.findById(input.notificationId)) as Notification | null;
+    if (!notification) {
+      return { ok: false, errorMessage: 'Notification not found.' };
+    }
+
+    const user = (await data.User.findById(notification.user_id)) as User | null;
+    if (!user || !user.email) {
+      return { ok: false, errorMessage: 'Recipient user not found or has no email.' };
+    }
+
+    // Check user's email preferences
+    const prefsRows = await data.NotificationPreferences.findMany({
+      user_id: { eq: notification.user_id },
+    } as never);
+    const prefs = (prefsRows as NotificationPreferences[])[0];
+    if (prefs) {
+      if (!prefs.emailEnabled) {
+        return { ok: false, errorMessage: 'User has email notifications disabled.' };
+      }
+      const typesDisabled = parseJsonColumn<string[]>(prefs.typesDisabled, []);
+      if (typesDisabled.includes(notification.type)) {
+        return { ok: false, errorMessage: `User has disabled email for type "${notification.type}".` };
+      }
+    }
+
+    const emailData = buildNotificationEmail({
+      recipientName: user.fullName,
+      notificationTitle: notification.title,
+      notificationMessage: notification.message,
+      notificationType: notification.type,
+      actionUrl: notification.actionUrl ?? null,
+      actionLabel: notification.actionLabel ?? null,
+    });
+
+    const result = await sendEmail({
+      to: user.email,
+      subject: emailData.subject,
+      html: emailData.html,
+      text: emailData.text,
+      tags: [{ name: 'type', value: 'notification' }, { name: 'notificationId', value: input.notificationId }],
+    });
+
+    if (result.ok) {
+      ctx.log.info(`Notification email sent to ${user.email} (messageId=${result.messageId}).`);
+    } else {
+      ctx.log.error(`Failed to send notification email: ${result.errorMessage}`);
+    }
+    return result;
+  },
+  [],
+);
+
+/* ============================================================================
+   13. SEND EXPORT READY EMAIL — via Resend
+   ============================================================================ */
+
+interface SendExportReadyEmailInput {
+  snapshotId: string;
+}
+
+interface SendExportReadyEmailResult {
+  ok: boolean;
+  messageId?: string;
+  errorMessage?: string;
+}
+
+udf.func(
+  'sendExportReadyEmail',
+  async (input: SendExportReadyEmailInput, ctx: RayfinContext<AidipSchema>): Promise<SendExportReadyEmailResult> => {
+    ctx.log.info(`sendExportReadyEmail invoked: snapshotId=${input.snapshotId}`);
+    const data = ctx.getDataClient();
+
+    const snapshot = (await data.ReportSnapshot.findById(input.snapshotId)) as ReportSnapshot | null;
+    if (!snapshot) {
+      return { ok: false, errorMessage: 'Snapshot not found.' };
+    }
+    if (snapshot.status !== 'completed') {
+      return { ok: false, errorMessage: `Snapshot status is "${snapshot.status}", not "completed".` };
+    }
+
+    const user = (await data.User.findById(snapshot.user_id)) as User | null;
+    if (!user || !user.email) {
+      return { ok: false, errorMessage: 'Recipient user not found or has no email.' };
+    }
+
+    const report = (await data.Report.findById(snapshot.report_id)) as Report | null;
+    const reportTitle = report?.title ?? 'Your report';
+
+    // Check user's email preferences for export_ready type
+    const prefsRows = await data.NotificationPreferences.findMany({
+      user_id: { eq: snapshot.user_id },
+    } as never);
+    const prefs = (prefsRows as NotificationPreferences[])[0];
+    if (prefs) {
+      if (!prefs.emailEnabled) {
+        return { ok: false, errorMessage: 'User has email notifications disabled.' };
+      }
+      const typesDisabled = parseJsonColumn<string[]>(prefs.typesDisabled, []);
+      if (typesDisabled.includes('export_ready')) {
+        return { ok: false, errorMessage: 'User has disabled email for "export_ready" notifications.' };
+      }
+    }
+
+    const downloadUrl = snapshot.signedUrl ?? snapshot.fileUrl ?? '';
+    if (!downloadUrl) {
+      return { ok: false, errorMessage: 'No download URL available for this snapshot.' };
+    }
+
+    const emailData = buildExportReadyEmail({
+      recipientName: user.fullName,
+      reportTitle,
+      format: snapshot.format,
+      fileSizeKb: snapshot.fileSizeKb ?? 0,
+      downloadUrl,
+      expiresAt: snapshot.expiresAt instanceof Date
+        ? snapshot.expiresAt.toISOString()
+        : String(snapshot.expiresAt),
+    });
+
+    const result = await sendEmail({
+      to: user.email,
+      subject: emailData.subject,
+      html: emailData.html,
+      text: emailData.text,
+      tags: [{ name: 'type', value: 'export_ready' }, { name: 'snapshotId', value: input.snapshotId }],
+    });
+
+    if (result.ok) {
+      ctx.log.info(`Export ready email sent to ${user.email} (messageId=${result.messageId}).`);
+    } else {
+      ctx.log.error(`Failed to send export ready email: ${result.errorMessage}`);
+    }
+    return result;
+  },
+  [],
+);
+
+/* ============================================================================
    Export the UDF instance — Rayfin picks it up automatically.
    ============================================================================ */
 
@@ -1755,6 +2018,12 @@ export type {
   GenerateAiInsightResult,
   GetChatSuggestionsInput,
   GetChatSuggestionsResult,
+  SendInvitationEmailInput,
+  SendInvitationEmailResult,
+  SendNotificationEmailInput,
+  SendNotificationEmailResult,
+  SendExportReadyEmailInput,
+  SendExportReadyEmailResult,
 };
 
 // Keep these imports referenced (used via type narrowing above).

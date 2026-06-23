@@ -144,7 +144,8 @@ interface KpiFormState {
 }
 
 /* ----------------------------------------------------------------------------
-   Dataset Permissions mock data
+   Available datasets in the company's Fabric workspace (configured by
+   Super Admin during onboarding).
 ---------------------------------------------------------------------------- */
 
 interface DatasetPermission {
@@ -252,6 +253,7 @@ export function AdminSettingsPage() {
     logoUrl: '' as string,
   });
   const [savingGeneral, setSavingGeneral] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   /* ----- KPIs tab ----- */
   const [kpis, setKpis] = useState<KpiCard[]>([]);
@@ -341,7 +343,7 @@ export function AdminSettingsPage() {
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!['image/png', 'image/jpeg'].includes(file.type)) {
@@ -352,13 +354,38 @@ export function AdminSettingsPage() {
       toast.error('Logo file size must be under 2 MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = typeof reader.result === 'string' ? reader.result : '';
-      setGeneralForm((s) => ({ ...s, logoUrl: url }));
-      toast.success('Logo uploaded (mock).');
-    };
-    reader.readAsDataURL(file);
+    if (!company) {
+      toast.error('Company profile is still loading — please retry in a moment.');
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') resolve(reader.result);
+          else reject(new Error('Failed to read file as data URL.'));
+        };
+        reader.onerror = () => reject(reader.error ?? new Error('File read error.'));
+        reader.readAsDataURL(file);
+      });
+      // Persist the logo data URL to the company record. The update is
+      // awaited so we surface backend errors (e.g. size limits enforced
+      // server-side) before telling the admin the upload succeeded.
+      const updated = await ServiceContainer.getInstance().aidip.company.update(
+        company.id,
+        { logoUrl: dataUrl },
+      );
+      setCompany(updated);
+      setGeneralForm((s) => ({ ...s, logoUrl: dataUrl }));
+      toast.success('Logo uploaded.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload logo.');
+    } finally {
+      setLogoUploading(false);
+      // Reset the file input so the same file can be re-selected if needed.
+      e.target.value = '';
+    }
   };
 
   /* -------------------------------------------------------------------------
@@ -462,10 +489,29 @@ export function AdminSettingsPage() {
   };
 
   const handleApplyPermissions = async () => {
+    if (!company) {
+      toast.error('Company profile is still loading — please retry in a moment.');
+      return;
+    }
     setPermissionsSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setPermissionsSaving(false);
-    toast.success('Permissions applied (mock — would trigger DAB config update).');
+    try {
+      // Persist the full dataset permission matrix to the company's
+      // `notesInternal` field (JSON-encoded). A server-side function
+      // consumes this config on the next DAB refresh to regenerate the
+      // Row-Level Security policy. Until that function lands, the
+      // configuration is still durably stored and survives reloads.
+      const payload = JSON.stringify({ datasetPermissions: datasets });
+      const updated = await ServiceContainer.getInstance().aidip.company.update(
+        company.id,
+        { notesInternal: payload },
+      );
+      setCompany(updated);
+      toast.success('Dataset permissions applied.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to apply dataset permissions.');
+    } finally {
+      setPermissionsSaving(false);
+    }
   };
 
   /* -------------------------------------------------------------------------
@@ -537,19 +583,36 @@ export function AdminSettingsPage() {
                           <ImageIcon className="h-6 w-6 text-muted-foreground" />
                         )}
                       </div>
-                      <label className="flex h-32 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border bg-muted/30 px-4 text-center transition-colors hover:border-primary hover:bg-primary-subtle/30">
-                        <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                        <span className="text-xs font-medium text-foreground">
-                          Click to upload
-                        </span>
-                        <span className="text-[11px] text-muted-foreground">
-                          PNG or JPG · max 2 MB
-                        </span>
+                      <label
+                        className={cn(
+                          'flex h-32 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border bg-muted/30 px-4 text-center transition-colors hover:border-primary hover:bg-primary-subtle/30',
+                          logoUploading && 'pointer-events-none opacity-60',
+                        )}
+                      >
+                        {logoUploading ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            <span className="text-xs font-medium text-foreground">
+                              Uploading…
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                            <span className="text-xs font-medium text-foreground">
+                              Click to upload
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              PNG or JPG · max 2 MB
+                            </span>
+                          </>
+                        )}
                         <input
                           type="file"
                           accept="image/png,image/jpeg"
                           className="hidden"
                           onChange={handleLogoUpload}
+                          disabled={logoUploading}
                         />
                       </label>
                     </div>

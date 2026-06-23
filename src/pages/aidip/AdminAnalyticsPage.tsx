@@ -59,6 +59,7 @@ import {
   getInitials,
 } from '@/lib/aidip/format';
 import { ServiceContainer } from '@/services/ServiceContainer';
+import { useAidipSession } from '@/hooks/aidip/useAidipSession';
 import { cn } from '@/lib/utils';
 
 import {
@@ -116,6 +117,7 @@ const AUDIT_SEVERITY_COLOR: Record<AuditSeverity, string> = {
 const CHART_PRIMARY = 'var(--primary)'; // #0078D4
 
 export function AdminAnalyticsPage() {
+  const { companyId } = useAidipSession();
   const [analytics, setAnalytics] = useState<TeamAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
@@ -229,11 +231,38 @@ export function AdminAnalyticsPage() {
      Handlers
   ------------------------------------------------------------------------- */
   const handleSaveAlerts = async () => {
+    if (!companyId) {
+      toast.error('Your company profile is still loading — please retry in a moment.');
+      return;
+    }
     setAlertsSaving(true);
-    // Simulate save (no backend method exists yet per spec)
-    await new Promise((r) => setTimeout(r, 600));
-    setAlertsSaving(false);
-    toast.success('Consumption alerts saved.');
+    try {
+      // Persist the alert thresholds to the company's `notesInternal`
+      // field (JSON-encoded under the `consumptionAlerts` key). A
+      // server-side scheduler reads this config to evaluate and fire
+      // email/in-app alerts when query consumption crosses each
+      // threshold. Storing it on the company guarantees the config
+      // survives reloads and is visible to every admin of the tenant.
+      const payload = JSON.stringify({
+        consumptionAlerts: {
+          thresholds: alerts.thresholds.reduce<
+            Record<number, { email: boolean; inApp: boolean }>
+          >((acc, t) => {
+            acc[t.pct] = { email: t.email, inApp: t.inApp };
+            return acc;
+          }, {}),
+          blockAt100: alerts.blockAt100,
+        },
+      });
+      await ServiceContainer.getInstance().aidip.company.update(companyId, {
+        notesInternal: payload,
+      });
+      toast.success('Alert configuration saved.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save alert configuration.');
+    } finally {
+      setAlertsSaving(false);
+    }
   };
 
   const handleExportCsv = async () => {

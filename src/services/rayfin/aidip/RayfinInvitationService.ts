@@ -91,7 +91,7 @@ export class RayfinInvitationService implements IInvitationService {
 
   async create(input: InvitationInput): Promise<Invitation> {
     const client = getRayfinClient();
-    const companyId = await getCurrentCompanyId();
+    const companyId = input.companyId ?? (await getCurrentCompanyId());
     if (!companyId) throw new Error('No company in session.');
     const inviterId = getCurrentUserId();
 
@@ -147,11 +147,36 @@ export class RayfinInvitationService implements IInvitationService {
     } as never);
 
     const inv = mapRow(row as unknown as RayfinInvitationRow, await getInviterName(inviterId));
-    await recordAudit('invitation_sent', 'invitation', inv.id, {
-      email: inv.email,
-      role: inv.role,
-    });
-    await pushNotification(inviterId, 'invitation_sent', 'Invitation sent', `An invitation has been sent to ${inv.email}.`, '/admin/team', 'View team');
+    await recordAudit(
+      'invitation_sent',
+      'invitation',
+      inv.id,
+      {
+        email: inv.email,
+        role: inv.role,
+      },
+      'info',
+      companyId,
+    );
+    await pushNotification(
+      inviterId,
+      'invitation_sent',
+      'Invitation sent',
+      `An invitation has been sent to ${inv.email}.`,
+      '/admin/team',
+      'View team',
+      companyId,
+    );
+
+    // Fire-and-forget: send the invitation email via the server-side
+    // `sendInvitationEmail` Rayfin function (Resend). Non-blocking —
+    // the invitation is already persisted; email delivery is best-effort.
+    try {
+      void client.functions.sendInvitationEmail.invoke({ invitationId: inv.id });
+    } catch (err) {
+      console.error('Failed to trigger invitation email:', err);
+    }
+
     return inv;
   }
 
@@ -164,7 +189,16 @@ export class RayfinInvitationService implements IInvitationService {
       { id },
       { token, tokenHash, status: 'pending', expiresAt, createdAt: nowIso() } as never,
     );
-    return mapRow(row as unknown as RayfinInvitationRow, await getInviterName((row as unknown as RayfinInvitationRow).invitedBy));
+    const inv = mapRow(row as unknown as RayfinInvitationRow, await getInviterName((row as unknown as RayfinInvitationRow).invitedBy));
+
+    // Fire-and-forget: re-send the invitation email.
+    try {
+      void client.functions.sendInvitationEmail.invoke({ invitationId: inv.id });
+    } catch (err) {
+      console.error('Failed to trigger invitation email (resend):', err);
+    }
+
+    return inv;
   }
 
   async cancel(id: string): Promise<Invitation> {

@@ -62,10 +62,21 @@ export class RayfinUserService implements IUserService {
     status?: UserStatus;
     search?: string;
   }): Promise<User[]> {
-    const client = getRayfinClient();
     const me = await this.getCurrent();
     if (!me?.companyId) return [];
-    const where: Record<string, unknown> = { company_id: { eq: me.companyId } };
+    return this.listByCompanyId(me.companyId, filters);
+  }
+
+  async listByCompanyId(
+    companyId: string,
+    filters?: {
+      role?: UserRole;
+      status?: UserStatus;
+      search?: string;
+    },
+  ): Promise<User[]> {
+    const client = getRayfinClient();
+    const where: Record<string, unknown> = { company_id: { eq: companyId } };
     if (filters?.role) where.role = { eq: filters.role };
     if (filters?.status) where.status = { eq: filters.status };
     let rows = await client.data.User.findMany(where as never);

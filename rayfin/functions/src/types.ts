@@ -171,4 +171,31 @@ export type AppFunctionsSchema = {
       errorMessage?: string;
     };
   };
+
+  sendInvitationEmail: {
+    input: { invitationId: string };
+    output: {
+      ok: boolean;
+      messageId?: string;
+      errorMessage?: string;
+    };
+  };
+
+  sendNotificationEmail: {
+    input: { notificationId: string };
+    output: {
+      ok: boolean;
+      messageId?: string;
+      errorMessage?: string;
+    };
+  };
+
+  sendExportReadyEmail: {
+    input: { snapshotId: string };
+    output: {
+      ok: boolean;
+      messageId?: string;
+      errorMessage?: string;
+    };
+  };
 };

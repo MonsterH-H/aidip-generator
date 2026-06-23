@@ -105,8 +105,8 @@ export async function chatCompletion(
 }
 
 /**
- * Reset the cached client + config — used by tests to simulate a fresh
- * process. Not intended for production use.
+ * Reset the cached client + config — used by tests to start with a fresh
+ * client. Not intended for production use.
  */
 export function resetOpenAIClientCache(): void {
   cachedClient = null;

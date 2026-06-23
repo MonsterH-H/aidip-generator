@@ -11,7 +11,7 @@
  * Premium enterprise styling aligned with Azure Portal / Microsoft Fabric.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -90,9 +90,10 @@ import {
 import { Label } from '@/components/ui/label';
 
 /* ----------------------------------------------------------------------------
-   Mocked login history — backend doesn't expose this yet (CDC §8.4).
-   We surface 5–10 deterministic mock entries derived from the user id so
-   the admin sees a realistic session trail.
+   Login history — derived from real `login` audit log entries (CDC §8.4).
+   The audit log records the timestamp, IP address and user agent of every
+   successful sign-in. AIDIP does not collect geolocation, so the "approx.
+   location" column surfaces "—" rather than a guessed city.
 ---------------------------------------------------------------------------- */
 interface LoginHistoryEntry {
   id: string;
@@ -102,21 +103,26 @@ interface LoginHistoryEntry {
   location: string;
 }
 
-function buildLoginHistory(user: User): LoginHistoryEntry[] {
-  const browsers = ['Chrome 131 · macOS', 'Edge 130 · Windows 11', 'Safari 17 · iOS', 'Firefox 129 · Linux'];
-  const locations = ['Casablanca, MA', 'Rabat, MA', 'Paris, FR', 'London, UK', 'Dubai, AE'];
-  const baseTs = user.lastLogin ? new Date(user.lastLogin).getTime() : Date.now();
-  const count = 7;
-  return Array.from({ length: count }).map((_, i) => {
-    const ts = new Date(baseTs - i * 6 * 3600_000 - i * 47 * 60_000).toISOString();
-    return {
-      id: `${user.id}-login-${i}`,
-      date: ts,
-      ip: `41.${(92 + i) % 255}.${(i * 13) % 255}.${(i * 29 + 7) % 255}`,
-      browser: browsers[i % browsers.length]!,
-      location: locations[i % locations.length]!,
-    };
-  });
+/**
+ * Parses the browser + OS label from a raw user agent string. Recognizes the
+ * four browsers used by AIDIP members (Edge, Chrome, Firefox, Safari) and
+ * falls back to "Unknown browser" for unrecognised agents.
+ */
+function parseBrowser(ua: string | null): string {
+  if (!ua) return 'Unknown browser';
+  const lower = ua.toLowerCase();
+  if (lower.includes('edg/')) return 'Edge';
+  if (lower.includes('chrome/') || lower.includes('crios')) return 'Chrome';
+  if (lower.includes('firefox/') || lower.includes('fxios')) return 'Firefox';
+  if (
+    lower.includes('safari/') ||
+    lower.includes('iphone') ||
+    lower.includes('ipad') ||
+    lower.includes('mac os')
+  ) {
+    return 'Safari';
+  }
+  return 'Unknown browser';
 }
 
 /** Mask all but the last 4 chars of the Azure AD object ID. */
@@ -136,6 +142,7 @@ export function AdminTeamMemberPage() {
 
   const [reports, setReports] = useState<Report[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loginHistory, setLoginHistory] = useState<LoginHistoryEntry[]>([]);
 
   const [roleChangeOpen, setRoleChangeOpen] = useState(false);
   const [suspendOpen, setSuspendOpen] = useState(false);
@@ -150,11 +157,15 @@ export function AdminTeamMemberPage() {
     setError(null);
     try {
       const svc = ServiceContainer.getInstance().aidip;
-      const [u, allReports, allConversations, team] = await Promise.all([
+      // Window the audit log to the last 90 days — matches the retention
+      // horizon recommended in CDC §8.4 and keeps the login trail finite.
+      const ninetyDaysAgoIso = new Date(Date.now() - 90 * 86_400_000).toISOString();
+      const [u, allReports, allConversations, team, loginLogs] = await Promise.all([
         svc.user.get(userId),
         svc.report.list(),
         svc.conversation.list(),
         svc.user.listByCompany({ status: 'active' }),
+        svc.auditLog.list({ action: 'login', userId, from: ninetyDaysAgoIso }),
       ]);
       if (!u) {
         setError('Member not found.');
@@ -174,6 +185,17 @@ export function AdminTeamMemberPage() {
           .slice(0, 10),
       );
       setTransferCandidates(team.filter((m) => m.id !== userId));
+      setLoginHistory(
+        loginLogs.map((log) => ({
+          id: log.id,
+          date: log.createdAt,
+          ip: log.ipAddress ?? '—',
+          browser: parseBrowser(log.userAgent),
+          // AIDIP does not collect geolocation data — surface "—" rather
+          // than a guessed city (CDC §8.4 — privacy by design).
+          location: '—',
+        })),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load member.');
     } finally {
@@ -184,8 +206,6 @@ export function AdminTeamMemberPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const loginHistory = useMemo(() => (user ? buildLoginHistory(user) : []), [user]);
 
   /* -------------------------------------------------------------------------
      Actions
@@ -448,37 +468,49 @@ export function AdminTeamMemberPage() {
                 <Monitor className="h-4 w-4 text-primary" />
                 Login history
               </CardTitle>
-              <span className="text-[11px] text-muted-foreground">Last {loginHistory.length} sessions</span>
+              <span className="text-[11px] text-muted-foreground">
+                {loginHistory.length > 0
+                  ? `Last ${loginHistory.length} session${loginHistory.length === 1 ? '' : 's'}`
+                  : 'No sessions recorded'}
+              </span>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="pl-5">Date</TableHead>
-                    <TableHead>IP address</TableHead>
-                    <TableHead>Browser</TableHead>
-                    <TableHead className="pr-5">Approx. location</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loginHistory.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="pl-5 text-sm text-foreground">
-                        {formatDateTime(entry.date)}
-                      </TableCell>
-                      <TableCell className="text-sm tabular-nums text-muted-foreground">
-                        {entry.ip}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {entry.browser}
-                      </TableCell>
-                      <TableCell className="pr-5 text-sm text-muted-foreground">
-                        {entry.location}
-                      </TableCell>
+              {loginHistory.length === 0 ? (
+                <EmptyState
+                  icon={Monitor}
+                  title="No login history available"
+                  description="This member hasn't signed in yet, or no login audit events have been recorded in the last 90 days."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead className="pl-5">Date</TableHead>
+                      <TableHead>IP address</TableHead>
+                      <TableHead>Browser</TableHead>
+                      <TableHead className="pr-5">Approx. location</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {loginHistory.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="pl-5 text-sm text-foreground">
+                          {formatDateTime(entry.date)}
+                        </TableCell>
+                        <TableCell className="text-sm tabular-nums text-muted-foreground">
+                          {entry.ip}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {entry.browser}
+                        </TableCell>
+                        <TableCell className="pr-5 text-sm text-muted-foreground">
+                          {entry.location}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
 

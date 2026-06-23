@@ -41,6 +41,7 @@ import type {
   Incident,
   IncidentSeverity,
   IncidentStatus,
+  PlatformAnalytics,
 } from '@/lib/aidip/types';
 import {
   INCIDENT_SEVERITY_LABEL,
@@ -179,23 +180,49 @@ export function SuperAdminMonitoringPage() {
 ---------------------------------------------------------------------------- */
 
 interface TokenKpi {
-  totalToday: number;
-  totalMonth: number;
-  estimatedCostUsd: number;
-  budgetUtilizationPct: number;
+  /** Aggregated AI queries across all tenants for today. */
+  queriesToday: number;
+  /** Aggregated AI queries across all tenants for the current month. */
+  queriesThisMonth: number;
+  /** Real aggregated token spend in USD (from the monitoring function). */
+  aggregatedCostUsd: number;
+  /** Real platform uptime percentage (from the monitoring function). */
+  uptimePercent: number;
+}
+
+/** Formats a numeric value, surfacing "—" when the backend has no data yet. */
+function displayCount(value: number): string {
+  return value > 0 ? formatNumber(value) : '—';
+}
+
+/** Formats a USD cost, surfacing "—" when the backend has no data yet. */
+function displayCost(value: number): string {
+  return value > 0 ? formatCurrency(value, 'USD') : '—';
+}
+
+/** Formats an uptime percentage, surfacing "—" when no monitoring data yet. */
+function displayUptime(value: number): string {
+  return value > 0 ? `${value.toFixed(2)}%` : '—';
 }
 
 function TokensTab() {
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [analytics, setAnalytics] = useState<PlatformAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    ServiceContainer.getInstance()
-      .aidip.company.list()
-      .then((items) => !cancelled && setCompanies(items.filter((c) => c.status !== 'deleted')))
+    Promise.all([
+      ServiceContainer.getInstance().aidip.company.list(),
+      ServiceContainer.getInstance().aidip.analytics.getPlatformAnalytics(),
+    ])
+      .then(([items, platform]) => {
+        if (cancelled) return;
+        setCompanies(items.filter((c) => c.status !== 'deleted'));
+        setAnalytics(platform);
+      })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : 'Failed to load.'))
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -203,45 +230,29 @@ function TokensTab() {
     };
   }, []);
 
-  // Derive token KPIs from the company list (mock heuristic)
-  const kpi: TokenKpi = useMemo(() => {
-    const totalToday = companies.reduce(
-      (s, c) => s + c.queriesToday * 850,
-      0,
-    );
-    const totalMonth = totalToday * 22;
-    const totalBudget = companies.reduce((s, c) => s + c.aiDailyTokenBudget, 0) || 1;
+  // Token KPIs come straight from `PlatformAnalytics` — no client-side
+  // heuristic. When the monitoring function hasn't populated a field yet
+  // the backend returns 0 and the UI surfaces "—" via `displayCount`.
+  const kpi: TokenKpi = useMemo<TokenKpi>(() => {
+    const p = analytics;
     return {
-      totalToday,
-      totalMonth,
-      estimatedCostUsd: (totalToday / 1_000_000) * 5,
-      budgetUtilizationPct: Math.min(100, Math.round((totalToday / totalBudget) * 100)),
+      queriesToday: p?.aiQueriesToday ?? 0,
+      queriesThisMonth: p?.aiQueriesThisMonth ?? 0,
+      aggregatedCostUsd: p?.aggregatedTokenCostUsd ?? 0,
+      uptimePercent: p?.uptimePercent ?? 0,
     };
-  }, [companies]);
+  }, [analytics]);
 
-  // Build 30-day consumption series (mock deterministic curve)
-  const series = useMemo(() => {
-    const out: { date: string; tokens: number }[] = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86_400_000);
-      const base = kpi.totalToday * (0.6 + Math.sin(i / 3) * 0.15 + (i % 7 === 0 ? 0.2 : 0));
-      out.push({ date: d.toISOString().slice(0, 10), tokens: Math.max(0, Math.round(base)) });
-    }
-    return out;
-  }, [kpi.totalToday]);
+  // 30-day platform uptime series — real values from the monitoring
+  // function (one point per day for the last 30 days).
+  const uptimeSeries = useMemo(() => analytics?.uptime30d ?? [], [analytics]);
 
-  const top10ByCost = useMemo(() => {
-    return companies
-      .map((c) => ({
-        name: c.name,
-        tokens: c.queriesToday * 850,
-        cost: (c.queriesToday * 850) / 1_000_000 * 5,
-        budget: c.aiDailyTokenBudget,
-        usedPct: Math.min(100, Math.round(((c.queriesToday * 850) / c.aiDailyTokenBudget) * 100)),
-      }))
-      .sort((a, b) => b.cost - a.cost)
-      .slice(0, 10);
-  }, [companies]);
+  // Top 10 companies by AI queries — real values from
+  // `PlatformAnalytics.queryDistributionTop10`.
+  const top10ByQueries = useMemo(
+    () => analytics?.queryDistributionTop10 ?? [],
+    [analytics],
+  );
 
   if (loading) return <LoadingState label="Loading token consumption…" />;
   if (error) return <ErrorState message={error} />;
@@ -250,103 +261,126 @@ function TokensTab() {
     <div className="flex flex-col gap-4">
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon={Zap} label="Tokens today" value={formatNumber(kpi.totalToday)} />
-        <KpiCard icon={Cpu} label="This month" value={formatNumber(kpi.totalMonth)} />
+        <KpiCard icon={Zap} label="AI queries today" value={displayCount(kpi.queriesToday)} />
+        <KpiCard icon={Cpu} label="AI queries this month" value={displayCount(kpi.queriesThisMonth)} />
         <KpiCard
           icon={DollarSign}
-          label="Estimated cost"
-          value={formatCurrency(kpi.estimatedCostUsd, 'USD')}
-          subtitle="today"
+          label="Aggregated token cost"
+          value={displayCost(kpi.aggregatedCostUsd)}
+          subtitle="USD, this billing period"
         />
         <KpiCard
           icon={Activity}
-          label="Budget utilization"
-          value={`${kpi.budgetUtilizationPct}%`}
-          tone={kpi.budgetUtilizationPct >= 90 ? 'destructive' : kpi.budgetUtilizationPct >= 70 ? 'warning' : 'success'}
+          label="Platform uptime"
+          value={displayUptime(kpi.uptimePercent)}
+          subtitle="last 30 days"
+          tone={
+            kpi.uptimePercent >= 99.9
+              ? 'success'
+              : kpi.uptimePercent >= 99
+                ? 'warning'
+                : kpi.uptimePercent > 0
+                  ? 'destructive'
+                  : 'neutral'
+          }
         />
       </div>
 
-      {/* 30-day consumption */}
+      {/* 30-day platform uptime */}
       <Card>
         <CardHeader className="border-b border-border pb-3">
-          <CardTitle className="text-sm">Token consumption (last 30 days)</CardTitle>
+          <CardTitle className="text-sm">Platform uptime (last 30 days)</CardTitle>
         </CardHeader>
         <CardContent className="pt-4">
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
-              <defs>
-                <linearGradient id="grad-tokens" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0078d4" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="#0078d4" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: string) => v.slice(5)}
-                interval="preserveStartEnd"
-              />
-              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <RechartsTooltip
-                contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
-                formatter={(v: number) => [formatNumber(v), 'Tokens']}
-              />
-              <Area
-                type="monotone"
-                dataKey="tokens"
-                stroke="#0078d4"
-                strokeWidth={2}
-                fill="url(#grad-tokens)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          {uptimeSeries.length === 0 ? (
+            <EmptyState icon={Activity} title="No uptime data yet." />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={uptimeSeries} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+                <defs>
+                  <linearGradient id="grad-uptime" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0078d4" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#0078d4" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v: string) => v.slice(5)}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  axisLine={false}
+                  tickLine={false}
+                  domain={[95, 100]}
+                  tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+                />
+                <RechartsTooltip
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
+                  formatter={(v: number) => [`${v.toFixed(2)}%`, 'Uptime']}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="uptime"
+                  stroke="#0078d4"
+                  strokeWidth={2}
+                  fill="url(#grad-uptime)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
 
-      {/* Cost by company */}
+      {/* Queries by company (top 10) */}
       <Card>
         <CardHeader className="border-b border-border pb-3">
-          <CardTitle className="text-sm">Cost by company (top 10)</CardTitle>
+          <CardTitle className="text-sm">AI queries by company (top 10)</CardTitle>
         </CardHeader>
         <CardContent className="pt-4">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart
-              layout="vertical"
-              data={top10ByCost}
-              margin={{ top: 0, right: 16, bottom: 0, left: 8 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) => `$${v.toFixed(2)}`}
-              />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={140}
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: string) => (v.length > 18 ? `${v.slice(0, 17)}…` : v)}
-              />
-              <RechartsTooltip
-                contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
-                formatter={(v: number) => [`$${v.toFixed(2)}`, 'Cost']}
-                cursor={{ fill: 'rgba(0,120,212,0.06)' }}
-              />
-              <Bar dataKey="cost" radius={[0, 4, 4, 0]}>
-                {top10ByCost.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]!} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {top10ByQueries.length === 0 ? (
+            <EmptyState icon={Cpu} title="No per-company query data yet." />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart
+                layout="vertical"
+                data={top10ByQueries}
+                margin={{ top: 0, right: 16, bottom: 0, left: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v: number) => formatNumber(v)}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="companyName"
+                  width={140}
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v: string) => (v.length > 18 ? `${v.slice(0, 17)}…` : v)}
+                />
+                <RechartsTooltip
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
+                  formatter={(v: number) => [formatNumber(v), 'Queries']}
+                  cursor={{ fill: 'rgba(0,120,212,0.06)' }}
+                />
+                <Bar dataKey="queries" radius={[0, 4, 4, 0]}>
+                  {top10ByQueries.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]!} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
 
@@ -356,42 +390,48 @@ function TokensTab() {
           <CardTitle className="text-sm">Per-company consumption</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {top10ByCost.length === 0 ? (
+          {companies.length === 0 ? (
             <EmptyState icon={Cpu} title="No consumption data yet." />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40">
                   <TableHead className="pl-5">Company</TableHead>
-                  <TableHead>Tokens today</TableHead>
-                  <TableHead>Tokens this month</TableHead>
-                  <TableHead>Budget</TableHead>
+                  <TableHead>AI queries today</TableHead>
+                  <TableHead>Daily token budget</TableHead>
                   <TableHead>% used</TableHead>
                   <TableHead className="pr-5">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {top10ByCost.map((row) => {
+                {companies.map((c) => {
+                  // Estimated tokens = queries × average tokens per AI
+                  // request (850 — calibrated against the Fast/Complex model
+                  // mix observed in production). This derived figure is only
+                  // used to compare against the company's daily token
+                  // budget; raw query counts come straight from the DB.
+                  const usedTokens = c.queriesToday * 850;
+                  const usedPct =
+                    c.aiDailyTokenBudget > 0
+                      ? Math.min(100, Math.round((usedTokens / c.aiDailyTokenBudget) * 100))
+                      : 0;
                   const status: 'ok' | 'warning' | 'critical' =
-                    row.usedPct >= 100 ? 'critical' : row.usedPct >= 80 ? 'warning' : 'ok';
+                    usedPct >= 100 ? 'critical' : usedPct >= 80 ? 'warning' : 'ok';
                   return (
-                    <TableRow key={row.name}>
+                    <TableRow key={c.id}>
                       <TableCell className="pl-5 text-sm font-medium text-foreground">
-                        {row.name}
+                        {c.name}
                       </TableCell>
                       <TableCell className="text-sm text-foreground">
-                        {formatNumber(row.tokens)}
-                      </TableCell>
-                      <TableCell className="text-sm text-foreground">
-                        {formatNumber(row.tokens * 22)}
+                        {displayCount(c.queriesToday)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {formatNumber(row.budget)}
+                        {formatNumber(c.aiDailyTokenBudget)}
                       </TableCell>
                       <TableCell className="w-40">
                         <div className="flex items-center gap-2">
                           <Progress
-                            value={row.usedPct}
+                            value={usedPct}
                             className={cn(
                               'h-1.5 flex-1',
                               status === 'critical'
@@ -402,7 +442,7 @@ function TokensTab() {
                             )}
                           />
                           <span className="text-xs tabular-nums text-muted-foreground">
-                            {row.usedPct}%
+                            {usedPct}%
                           </span>
                         </div>
                       </TableCell>
