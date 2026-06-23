@@ -5,21 +5,19 @@ import fs from 'fs';
 let theme = {};
 try {
   const themePath = './theme.json';
-
   if (fs.existsSync(themePath)) {
     theme = JSON.parse(fs.readFileSync(themePath, 'utf-8'));
   }
 } catch (err) {
   console.error('failed to parse custom styles', err);
 }
+
 const defaultTheme = {
   container: {
     center: true,
     padding: '2rem',
   },
   extend: {
-    // Note: Raw media query screens (coarse, fine, pwa) are defined as CSS custom variants
-    // in main.css instead of here to avoid Tailwind v4 container query conflicts.
     colors: {
       neutral: {
         1: 'var(--color-neutral-1)',
@@ -34,18 +32,6 @@ const defaultTheme = {
         10: 'var(--color-neutral-10)',
         11: 'var(--color-neutral-11)',
         12: 'var(--color-neutral-12)',
-        a1: 'var(--color-neutral-a1)',
-        a2: 'var(--color-neutral-a2)',
-        a3: 'var(--color-neutral-a3)',
-        a4: 'var(--color-neutral-a4)',
-        a5: 'var(--color-neutral-a5)',
-        a6: 'var(--color-neutral-a6)',
-        a7: 'var(--color-neutral-a7)',
-        a8: 'var(--color-neutral-a8)',
-        a9: 'var(--color-neutral-a9)',
-        a10: 'var(--color-neutral-a10)',
-        a11: 'var(--color-neutral-a11)',
-        a12: 'var(--color-neutral-a12)',
         contrast: 'var(--color-neutral-contrast)',
       },
       accent: {
@@ -63,21 +49,6 @@ const defaultTheme = {
         12: 'var(--color-accent-12)',
         contrast: 'var(--color-accent-contrast)',
       },
-      'accent-secondary': {
-        1: 'var(--color-accent-secondary-1)',
-        2: 'var(--color-accent-secondary-2)',
-        3: 'var(--color-accent-secondary-3)',
-        4: 'var(--color-accent-secondary-4)',
-        5: 'var(--color-accent-secondary-5)',
-        6: 'var(--color-accent-secondary-6)',
-        7: 'var(--color-accent-secondary-7)',
-        8: 'var(--color-accent-secondary-8)',
-        9: 'var(--color-accent-secondary-9)',
-        10: 'var(--color-accent-secondary-10)',
-        11: 'var(--color-accent-secondary-11)',
-        12: 'var(--color-accent-secondary-12)',
-        contrast: 'var(--color-accent-secondary-contrast)',
-      },
       fg: {
         DEFAULT: 'var(--color-fg)',
         secondary: 'var(--color-fg-secondary)',
@@ -88,6 +59,32 @@ const defaultTheme = {
         overlay: 'var(--color-bg-overlay)',
       },
       'focus-ring': 'var(--color-focus-ring)',
+      surface: {
+        DEFAULT: 'var(--surface)',
+        muted: 'var(--surface-muted)',
+        subtle: 'var(--surface-subtle)',
+        elevated: 'var(--surface-elevated)',
+      },
+      header: {
+        DEFAULT: 'var(--header)',
+        foreground: 'var(--header-foreground)',
+        border: 'var(--header-border)',
+      },
+      success: {
+        DEFAULT: 'var(--success)',
+        foreground: 'var(--success-foreground)',
+        subtle: 'var(--success-subtle)',
+      },
+      warning: {
+        DEFAULT: 'var(--warning)',
+        foreground: 'var(--warning-foreground)',
+        subtle: 'var(--warning-subtle)',
+      },
+      info: {
+        DEFAULT: 'var(--info)',
+        subtle: 'var(--info-subtle)',
+      },
+      'border-strong': 'var(--border-strong)',
     },
     borderRadius: {
       sm: 'var(--radius-sm)',
@@ -96,6 +93,37 @@ const defaultTheme = {
       xl: 'var(--radius-xl)',
       '2xl': 'var(--radius-2xl)',
       full: 'var(--radius-full)',
+    },
+    fontFamily: {
+      sans: 'var(--font-sans)',
+      mono: 'var(--font-mono)',
+    },
+    boxShadow: {
+      xs: 'var(--shadow-xs)',
+      sm: 'var(--shadow-sm)',
+      md: 'var(--shadow-md)',
+      lg: 'var(--shadow-lg)',
+      xl: 'var(--shadow-xl)',
+      ring: 'var(--shadow-ring)',
+    },
+    keyframes: {
+      'fade-in': {
+        from: { opacity: '0' },
+        to: { opacity: '1' },
+      },
+      'slide-in-right': {
+        from: { transform: 'translateX(100%)' },
+        to: { transform: 'translateX(0)' },
+      },
+      'slide-up': {
+        from: { transform: 'translateY(8px)', opacity: '0' },
+        to: { transform: 'translateY(0)', opacity: '1' },
+      },
+    },
+    animation: {
+      'fade-in': 'fade-in 200ms ease-out',
+      'slide-in-right': 'slide-in-right 200ms ease-out',
+      'slide-up': 'slide-up 200ms ease-out',
     },
   },
   spacing: {

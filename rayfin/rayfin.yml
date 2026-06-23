@@ -14,8 +14,15 @@ services:
   data:
     enabled: true
     dialect: mssql
+  functions:
+    enabled: true
+    runtime: node
+    language: typescript
+    entry: rayfin/functions/src/function_app.ts
   storage:
     enabled: true
+    containers:
+      - aidip-exports
   staticHosting:
     enabled: true
     folder: dist

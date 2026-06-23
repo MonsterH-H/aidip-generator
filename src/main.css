@@ -3,9 +3,13 @@
 @import './styles/theme.css';
 @import './index.css';
 @import 'tw-animate-css';
+
 /*
-  ---break---
+  AIDIP — Premium enterprise light theme
+  Inspired by Azure Portal · Microsoft Fabric · Vercel · Stripe · Linear
+  Palette: Azure Blue primary · White surfaces · Soft gray neutrals
 */
+
 @custom-variant dark (&:is(.dark *));
 @custom-variant coarse (@media (pointer: coarse));
 @custom-variant fine (@media (pointer: fine));
@@ -13,113 +17,198 @@
 
 @config '../tailwind.config.js';
 
-/*
-  The default border color has changed to `currentColor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
-*/
 @layer base {
   *,
   ::after,
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
+    border-color: var(--color-border, currentColor);
   }
 }
 
-/*
-  ---break---
-*/
+/* ----------------------------------------------------------------------------
+   AIDIP Design Tokens — Light theme (default)
+---------------------------------------------------------------------------- */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Backgrounds & surfaces */
+  --background: #ffffff;
+  --foreground: #0f172a; /* slate-900 */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  /* Surfaces & insets */
+  --surface: #ffffff;
+  --surface-muted: #f8fafc; /* slate-50 */
+  --surface-subtle: #f1f5f9; /* slate-100 */
+  --surface-elevated: #ffffff;
+
+  /* Primary — Azure Blue */
+  --primary: #0078d4; /* Azure communication blue */
+  --primary-foreground: #ffffff;
+  --primary-hover: #106ebe;
+  --primary-active: #005a9e;
+  --primary-subtle: #eff6fc; /* Azure tint */
+  --primary-subtle-foreground: #0078d4;
+
+  /* Secondary & muted */
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f8fafc;
+  --muted-foreground: #64748b; /* slate-500 */
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+
+  /* Status colors */
+  --destructive: #dc2626; /* red-600 */
+  --destructive-foreground: #ffffff;
+  --destructive-subtle: #fef2f2;
+  --success: #16a34a; /* green-600 */
+  --success-foreground: #ffffff;
+  --success-subtle: #f0fdf4;
+  --warning: #d97706; /* amber-600 */
+  --warning-foreground: #ffffff;
+  --warning-subtle: #fffbeb;
+  --info: #0078d4;
+  --info-subtle: #eff6fc;
+
+  /* Borders & inputs */
+  --border: #e2e8f0; /* slate-200 */
+  --border-strong: #cbd5e1; /* slate-300 */
+  --input: #e2e8f0;
+  --ring: #0078d4;
+
+  /* Chart palette (Azure-aligned) */
+  --chart-1: #0078d4; /* Azure blue */
+  --chart-2: #2dd4bf; /* teal */
+  --chart-3: #6366f1; /* indigo */
+  --chart-4: #f59e0b; /* amber */
+  --chart-5: #ec4899; /* pink */
+
+  /* Sidebar */
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #0078d4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eff6fc;
+  --sidebar-accent-foreground: #0078d4;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0078d4;
+
+  /* Header */
+  --header: #ffffff;
+  --header-foreground: #0f172a;
+  --header-border: #e2e8f0;
+
+  /* Shadows — professional, subtle */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.07), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.05);
+  --shadow-ring: 0 0 0 3px rgba(0, 120, 212, 0.15);
+
+  /* Fonts */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Layout metrics */
+  --header-height: 56px;
+  --sidebar-width: 256px;
+  --sidebar-collapsed-width: 64px;
+  --content-max-width: 1440px;
 }
 
-/*
-  ---break---
-*/
+/* ----------------------------------------------------------------------------
+   Dark theme (provisional — AIDIP defaults to light per design spec)
+---------------------------------------------------------------------------- */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0b1220;
+  --foreground: #e2e8f0;
+  --card: #111827;
+  --card-foreground: #e2e8f0;
+  --popover: #111827;
+  --popover-foreground: #e2e8f0;
+
+  --surface: #111827;
+  --surface-muted: #0b1220;
+  --surface-subtle: #1e293b;
+  --surface-elevated: #1e293b;
+
+  --primary: #2b9fd8;
+  --primary-foreground: #0b1220;
+  --primary-hover: #4fb3e3;
+  --primary-active: #2b9fd8;
+  --primary-subtle: #0f2f43;
+  --primary-subtle-foreground: #4fb3e3;
+
+  --secondary: #1e293b;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #e2e8f0;
+
+  --destructive: #f87171;
+  --destructive-foreground: #0b1220;
+  --destructive-subtle: #2a1414;
+  --success: #4ade80;
+  --success-foreground: #0b1220;
+  --success-subtle: #0d2818;
+  --warning: #fbbf24;
+  --warning-foreground: #0b1220;
+  --warning-subtle: #2a1d08;
+  --info: #2b9fd8;
+  --info-subtle: #0f2f43;
+
+  --border: #1e293b;
+  --border-strong: #334155;
+  --input: #1e293b;
+  --ring: #2b9fd8;
+
+  --sidebar: #0b1220;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #2b9fd8;
+  --sidebar-primary-foreground: #0b1220;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #4fb3e3;
+  --sidebar-border: #1e293b;
+  --sidebar-ring: #2b9fd8;
+
+  --header: #0b1220;
+  --header-foreground: #e2e8f0;
+  --header-border: #1e293b;
+
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.55), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-ring: 0 0 0 3px rgba(43, 159, 216, 0.25);
 }
 
-/*
-  ---break---
-*/
+/* ----------------------------------------------------------------------------
+   Tailwind theme mapping
+---------------------------------------------------------------------------- */
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-2xl: calc(var(--radius) + 10px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -129,14 +218,28 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-elevated: var(--surface-elevated);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -145,45 +248,135 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-header: var(--header);
+  --color-header-foreground: var(--header-foreground);
+  --color-header-border: var(--header-border);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
 
-  /*
-  ---break---
-*/
   @keyframes accordion-down {
-    from {
-      height: 0;
-    }
-
-    to {
-      height: var(--radix-accordion-content-height);
-    }
+    from { height: 0; }
+    to { height: var(--radix-accordion-content-height); }
   }
-
-  /*
-  ---break---
-*/
   @keyframes accordion-up {
-    from {
-      height: var(--radix-accordion-content-height);
-    }
-
-    to {
-      height: 0;
-    }
+    from { height: var(--radix-accordion-content-height); }
+    to { height: 0; }
   }
 }
 
-/*
-  ---break---
-*/
+/* ----------------------------------------------------------------------------
+   Base layer
+---------------------------------------------------------------------------- */
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+    font-family: var(--font-sans);
   }
 
+  html,
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Refined focus ring */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Scrollbar — subtle, modern */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   AIDIP utility classes
+---------------------------------------------------------------------------- */
+@layer components {
+  /* Page container with max width and consistent gutters */
+  .aidip-page {
+    @apply mx-auto w-full max-w-[var(--content-max-width)] px-4 py-6 md:px-8 md:py-8;
+  }
+
+  /* Page header (title + actions) */
+  .aidip-page-header {
+    @apply mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .aidip-page-title {
+    @apply text-2xl font-semibold tracking-tight text-foreground;
+  }
+
+  .aidip-page-subtitle {
+    @apply text-sm text-muted-foreground;
+  }
+
+  /* Card with subtle border + shadow */
+  .aidip-card {
+    @apply rounded-lg border border-border bg-card shadow-sm;
+  }
+
+  .aidip-card-header {
+    @apply flex items-center justify-between border-b border-border px-5 py-4;
+  }
+
+  .aidip-card-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .aidip-card-body {
+    @apply p-5;
+  }
+
+  /* Sidebar nav item */
+  .aidip-nav-item {
+    @apply flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+  }
+  .aidip-nav-item-active {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+  }
+
+  /* Status dot */
+  .aidip-status-dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+
+  /* Premium gradient for hero / welcome banner */
+  .aidip-gradient-azure {
+    background: linear-gradient(135deg, #0078d4 0%, #106ebe 50%, #005a9e 100%);
+  }
+  .aidip-gradient-soft {
+    background: linear-gradient(135deg, #eff6fc 0%, #f8fafc 100%);
+  }
+
+  /* Subtle inner glow on hover for primary cards */
+  .aidip-hover-lift {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
   }
 }

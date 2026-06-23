@@ -1,18 +1,27 @@
 import { RayfinClient } from '@microsoft/rayfin-client';
 
-import type { FieldTechSchema } from '../../../rayfin/data/schema';
+import type { AidipSchema } from '../../../rayfin/data/schema';
+import type { AppFunctionsSchema } from '../../../rayfin/functions/src/types';
 
 /**
- * A singleton service that manages the RayfinClient instance
+ * A singleton service that manages the RayfinClient instance.
+ *
+ * The client is typed against:
+ *   - `AidipSchema` — the 14 AIDIP data entities (Company, User, …)
+ *   - `AppFunctionsSchema` — the 8 server-side functions (chat, exportReport, …)
+ *
+ * This gives type-safe access to:
+ *   - `client.data.<Entity>.select(...).where(...).execute()`
+ *   - `client.functions.<name>.invoke(args)` — fully type-checked
  */
 export class RayfinClientService {
   private static instance: RayfinClientService | null = null;
-  private _client: RayfinClient<FieldTechSchema> | null = null;
+  private _client: RayfinClient<AidipSchema, AppFunctionsSchema> | null = null;
 
   private constructor() {}
 
   /**
-   * Get the singleton instance of RayfinClientService
+   * Get the singleton instance of RayfinClientService.
    */
   public static getInstance(): RayfinClientService {
     if (!RayfinClientService.instance) {
@@ -22,34 +31,42 @@ export class RayfinClientService {
   }
 
   /**
-   * Initialize the RayfinClient with the provided base URL and publishable key
+   * Initialize the RayfinClient with the provided base URL and publishable key.
    *
-   * @param baseUrl The base URL of the Rayfin API
-   * @param publishableKey The publishable key for service-level authentication
-   * @param projectId Optional Rayfin project identifier (set by rayfin up)
-   * @returns The initialized RayfinClient instance
+   * The functions base URL is read from `VITE_RAYFIN_FUNCTIONS_URL`. When
+   * unset, function invocations throw at call time — set it via
+   * `rayfin env --framework vite` (which generates it from the manifest
+   * tokens after `rayfin up` provisions the Functions service).
+   *
+   * @param baseUrl The base URL of the Rayfin API (DAB / auth).
+   * @param publishableKey The publishable key for service-level authentication.
+   * @returns The initialized RayfinClient instance.
    */
   public initialize(
     baseUrl: string,
-    publishableKey: string
-  ): RayfinClient<FieldTechSchema> {
+    publishableKey: string,
+  ): RayfinClient<AidipSchema, AppFunctionsSchema> {
     if (!this._client) {
       console.log(`🔧 Initializing Rayfin client with baseUrl: ${baseUrl}`);
+
+      const functionsBaseUrl = import.meta.env.VITE_RAYFIN_FUNCTIONS_URL;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Origin: window.location.origin,
       };
 
-      this._client = new RayfinClient<FieldTechSchema>({
+      this._client = new RayfinClient<AidipSchema, AppFunctionsSchema>({
         baseUrl: baseUrl,
         publishableKey: publishableKey,
         useProxy: false,
         headers,
+        ...(functionsBaseUrl ? { functionsBaseUrl } : {}),
       });
 
       console.log(
-        `✅ Rayfin client configured for direct API calls to ${baseUrl}`
+        `✅ Rayfin client configured for direct API calls to ${baseUrl}` +
+          (functionsBaseUrl ? ` (functions: ${functionsBaseUrl})` : ' (functions: not configured)'),
       );
     }
 
@@ -60,7 +77,7 @@ export class RayfinClientService {
    * Get the RayfinClient instance
    * @throws Error if the client is not initialized
    */
-  public getClient(): RayfinClient<FieldTechSchema> {
+  public getClient(): RayfinClient<AidipSchema, AppFunctionsSchema> {
     if (!this._client) {
       throw new Error('RayfinClient not initialized. Call initialize() first.');
     }
@@ -86,6 +103,6 @@ export class RayfinClientService {
  * Helper function to get the RayfinClient instance
  * @throws Error if the client is not initialized
  */
-export function getRayfinClient(): RayfinClient<FieldTechSchema> {
+export function getRayfinClient(): RayfinClient<AidipSchema, AppFunctionsSchema> {
   return RayfinClientService.getInstance().getClient();
 }

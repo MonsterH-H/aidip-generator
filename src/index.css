@@ -1,1 +1,31 @@
-/* This is where custom CSS goes */
+/* AIDIP custom CSS — intentionally minimal.
+   All design tokens live in main.css / styles/theme.css. */
+
+/* Subtle gradient utility for empty / welcome states */
+.aidip-radial-fade {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 120, 212, 0.06), transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+/* Smooth sidebar collapse on mobile */
+.aidip-sidebar-transition {
+  transition: transform 200ms ease, width 200ms ease;
+}
+
+/* Skeleton shimmer (premium, subtle) */
+.aidip-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-muted) 0%,
+    var(--surface-subtle) 50%,
+    var(--surface-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: aidip-skeleton-shimmer 1.6s ease-in-out infinite;
+  border-radius: calc(var(--radius) - 2px);
+}
+@keyframes aidip-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

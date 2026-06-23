@@ -1,12 +1,12 @@
 {
   "name": "aidip",
   "private": true,
-  "version": "0.0.0",
+  "version": "3.0.0",
   "type": "module",
   "template": {
     "name": "field-technician",
-    "displayName": "Field Technician App",
-    "description": "Field service management app with role-based dashboards for dispatchers and technicians, job tracking, customer lookup, and dual-mode auth (local password + Fabric)"
+    "displayName": "AIDIP — AI Decision Intelligence Platform",
+    "description": "Multi-tenant SaaS conversational BI platform, native to Microsoft Fabric. AI Decision Intelligence Platform by HESYD."
   },
   "scripts": {
     "predev": "rayfin env --framework vite",
@@ -22,7 +22,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "rayfin:dev": "cross-env RAYFIN_FEATURE_FLAGS=docker-local-dev rayfin dev",
-    "rayfin:db": "cross-env RAYFIN_FEATURE_FLAGS=docker-local-dev rayfin dev db apply"
+    "rayfin:db": "cross-env RAYFIN_FEATURE_FLAGS=docker-local-dev rayfin dev db apply",
+    "functions:init": "rayfin functions init",
+    "functions:typegen": "rayfin functions typegen",
+    "functions:typegen:watch": "rayfin functions typegen --watch",
+    "dev:functions": "cross-env RAYFIN_FEATURE_FLAGS=docker-local-dev rayfin dev functions apply"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

@@ -71,10 +71,7 @@ describe('AuthContext', () => {
     mockAuthService = createMockAuthService();
     vi.spyOn(ServiceContainer, 'create').mockReturnValue({
       authService: mockAuthService,
-      userProfileService: {} as never,
-      regionService: {} as never,
-      customerService: {} as never,
-      jobService: {} as never,
+      aidip: {} as never,
     });
   });
 

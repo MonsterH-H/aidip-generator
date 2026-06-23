@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
+import * as React from 'react';
 
 const MOBILE_BREAKPOINT = 768;
 
+/**
+ * Returns true when the viewport is below the mobile breakpoint.
+ * Used by the shadcn sidebar component.
+ */
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState<boolean | undefined>(undefined);
+  const [isMobile, setIsMobile] = React.useState<boolean>(
+    typeof window !== 'undefined' ? window.innerWidth < MOBILE_BREAKPOINT : false,
+  );
 
-  useEffect(() => {
+  React.useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
     const onChange = () => {
       setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
@@ -15,5 +21,5 @@ export function useIsMobile() {
     return () => mql.removeEventListener('change', onChange);
   }, []);
 
-  return !!isMobile;
+  return isMobile;
 }

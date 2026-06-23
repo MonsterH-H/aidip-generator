@@ -1,37 +1,58 @@
-import { Customer } from './Customer.js';
-import { Equipment } from './Equipment.js';
-import { Job } from './Job.js';
-import { JobLog } from './JobLog.js';
-import { Region } from './Region.js';
-import { TaskItem } from './TaskItem.js';
-import { UserProfile } from './UserProfile.js';
-import { UserRegion } from './UserRegion.js';
+import { Company } from './Company.js';
+import { User } from './User.js';
+import { Invitation } from './Invitation.js';
+import { Conversation } from './Conversation.js';
+import { ChatMessage } from './ChatMessage.js';
+import { Report } from './Report.js';
+import { ReportSection } from './ReportSection.js';
+import { ReportShare } from './ReportShare.js';
+import { ReportSnapshot } from './ReportSnapshot.js';
+import { Notification } from './Notification.js';
+import { NotificationPreferences } from './NotificationPreferences.js';
+import { AuditLog } from './AuditLog.js';
+import { Incident } from './Incident.js';
+import { KpiConfig } from './KpiConfig.js';
 
 /**
- * Schema type definition for the Field Technician App
+ * AIDIP schema — type mapping entity names to their Rayfin-decorated classes.
  *
- * This type maps entity names to their corresponding model types,
- * enabling full type safety throughout the application when using
- * the RayfinClient and DataApi.
+ * This type drives the typed `client.data.<Entity>` accessors on RayfinClient.
  */
-export type FieldTechSchema = {
-  Customer: Customer;
-  Equipment: Equipment;
-  Job: Job;
-  JobLog: JobLog;
-  Region: Region;
-  TaskItem: TaskItem;
-  UserProfile: UserProfile;
-  UserRegion: UserRegion;
+export type AidipSchema = {
+  Company: Company;
+  User: User;
+  Invitation: Invitation;
+  Conversation: Conversation;
+  ChatMessage: ChatMessage;
+  Report: Report;
+  ReportSection: ReportSection;
+  ReportShare: ReportShare;
+  ReportSnapshot: ReportSnapshot;
+  Notification: Notification;
+  NotificationPreferences: NotificationPreferences;
+  AuditLog: AuditLog;
+  Incident: Incident;
+  KpiConfig: KpiConfig;
 };
 
+/**
+ * Schema array — consumed by the Rayfin compiler at deploy time
+ * (`rayfin up db apply`) to provision the corresponding SQL tables and
+ * DAB entities with the correct RLS policies.
+ */
 export const schema = [
-  Customer,
-  Equipment,
-  Job,
-  JobLog,
-  Region,
-  TaskItem,
-  UserProfile,
-  UserRegion,
+  Company,
+  User,
+  Invitation,
+  Conversation,
+  ChatMessage,
+  Report,
+  ReportSection,
+  ReportShare,
+  ReportSnapshot,
+  Notification,
+  NotificationPreferences,
+  AuditLog,
+  Incident,
+  KpiConfig,
 ];

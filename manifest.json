@@ -5,12 +5,15 @@
     "auth": true,
     "data": true,
     "storage": true,
+    "functions": true,
     "staticHosting": true
   },
   "hasDabSchema": true,
+  "hasFunctions": true,
   "tokens": [
     "__RAYFIN_API_URL__",
     "__RAYFIN_PK__",
+    "__RAYFIN_FUNCTIONS_URL__",
     "__FABRIC_ITEM_ID__",
     "__FABRIC_WORKSPACE_ID__",
     "__FABRIC_PORTAL_URL__"

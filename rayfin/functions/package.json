@@ -1,0 +1,28 @@
+{
+  "name": "aidip-functions",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AIDIP server-side Rayfin functions — 7-step chat pipeline, async export worker, KPI computation, impersonation, Fabric connection tests.",
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b --watch",
+    "typegen": "rayfin functions typegen",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.13.1",
+    "@azure/openai": "^2.0.0",
+    "@azure/storage-blob": "^12.27.0",
+    "@microsoft/fabric-user-data-functions": "^1.33.1",
+    "canvas": "^3.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pptxgenjs": "^3.12.0",
+    "puppeteer-core": "^23.11.1"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}
